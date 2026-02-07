@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Vite
+.vite/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# IDE / OS / temp
+.idea/
+.vscode/
+_tmp_*
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Optional
+coverage/
+*.local
+
+turbo.json
+.turbo

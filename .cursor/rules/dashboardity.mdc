@@ -1,0 +1,17 @@
+---
+description: Dashboardity 단일 패키지 구조 및 규칙
+alwaysApply: true
+---
+
+# Dashboardity (단일 패키지)
+
+## 구조
+- **src/** — 라이브러리 소스. core, app-shell, data-adapter, widget-wrapper, shared(types, utils, theme). 위젯은 내장하지 않음.
+- **examples/playground** — 실행 앱. `dashboardity`를 `file:../..`로 참조.
+
+## 의존성
+- **npm 패키지**: `@dashboardity/layout-core`, `@dashboardity/layout-store`, `react-griditty`는 npm 버전(`^1.0.0`) 사용.
+
+## 코드 스타일
+- 함수는 화살표 함수 사용.
+- 타입·유틸은 `./shared` 등 내부 경로에서 import.
