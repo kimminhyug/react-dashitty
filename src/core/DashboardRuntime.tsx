@@ -1,3 +1,4 @@
+import { createLayoutStore } from "@dashboardity/layout-store";
 import React, {
   forwardRef,
   useCallback,
@@ -7,17 +8,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { createLayoutStore } from "@dashboardity/layout-store";
-import { Dashboard } from "./Dashboard";
-import {
-  createEmptyPanel,
-  loadDashboard,
-  serializeDashboard,
-} from "./DashboardSerializer";
-import { PanelOptionEditor } from "./PanelOptionEditor";
-import { useContainerWidth } from "./useResponsiveGrid";
-import { resolveColumns, scaleLayout } from "../shared/breakpoints";
 import type {
+  BreakpointKey,
   DashboardGridOptions,
   DashboardSpec,
   DataSource,
@@ -27,6 +19,19 @@ import type {
   WidgetDefinition,
   WidgetRegistry,
 } from "../shared";
+import {
+  getBreakpointKey,
+  resolveColumns,
+  scaleLayout,
+} from "../shared/breakpoints";
+import { Dashboard } from "./Dashboard";
+import {
+  createEmptyPanel,
+  loadDashboard,
+  serializeDashboard,
+} from "./DashboardSerializer";
+import { PanelOptionEditor } from "./PanelOptionEditor";
+import { useContainerWidth } from "./useResponsiveGrid";
 
 const getWidgetSchema = (
   entry: WidgetRegistry[string] | undefined,
@@ -77,19 +82,29 @@ export const DashboardRuntime = forwardRef<
 
   const gridWrapRef = useRef<HTMLDivElement>(null);
   const containerWidth = useContainerWidth(gridWrapRef);
+  const widthForBreakpoint =
+    containerWidth ||
+    (typeof window !== "undefined" ? window.innerWidth : 1024);
+  const currentBreakpoint = useMemo(
+    () => getBreakpointKey(widthForBreakpoint, initialSpec.breakpoints),
+    [widthForBreakpoint, initialSpec.breakpoints],
+  );
   const resolvedColumns = useMemo(() => {
-    const colConfig =
-      initialSpec.columnsByBreakpoint ?? initialSpec.columns;
-    const width =
-      containerWidth ||
-      (typeof window !== "undefined" ? window.innerWidth : 1024);
-    return resolveColumns(width, colConfig, initialSpec.breakpoints);
+    const colConfig = initialSpec.columnsByBreakpoint ?? initialSpec.columns;
+    return resolveColumns(
+      widthForBreakpoint,
+      colConfig,
+      initialSpec.breakpoints,
+    );
   }, [
-    containerWidth,
+    widthForBreakpoint,
     initialSpec.columns,
     initialSpec.columnsByBreakpoint,
     initialSpec.breakpoints,
   ]);
+
+  const initialSpecRef = useRef(initialSpec);
+  initialSpecRef.current = initialSpec;
 
   const [store, setStore] = useState(() => loadDashboard(initialSpec).store);
   const [panels, setPanels] = useState<PanelConfig[]>(() => [
@@ -99,30 +114,57 @@ export const DashboardRuntime = forwardRef<
   const specIdRef = useRef(initialSpec.id);
   const storeRef = useRef(store);
   storeRef.current = store;
+  const prevBreakpointRef = useRef<BreakpointKey>(currentBreakpoint);
+  const layoutCacheRef = useRef<Partial<Record<BreakpointKey, GridItem[]>>>({});
+  const currentBreakpointRef = useRef(currentBreakpoint);
+  currentBreakpointRef.current = currentBreakpoint;
 
   useEffect(() => {
     if (resolvedColumns < 1) return;
-    if (specIdRef.current !== initialSpec.id) {
-      specIdRef.current = initialSpec.id;
-      const loaded = loadDashboard(initialSpec, { resolvedColumns });
+    const spec = initialSpecRef.current;
+    if (specIdRef.current !== spec.id) {
+      specIdRef.current = spec.id;
+      prevBreakpointRef.current = currentBreakpoint;
+      layoutCacheRef.current = {};
+      (Object.keys(spec.layoutsByBreakpoint ?? {}) as BreakpointKey[]).forEach(
+        (k) => {
+          const items = spec.layoutsByBreakpoint?.[k]?.items;
+          if (items) layoutCacheRef.current[k] = [...items];
+        },
+      );
+      const loaded = loadDashboard(spec, {
+        resolvedColumns,
+        breakpointKey: currentBreakpoint,
+        layoutCache: layoutCacheRef.current,
+      });
       setStore(loaded.store);
       setPanels([...loaded.panels]);
+      layoutCacheRef.current[currentBreakpoint] =
+        loaded.store.getState().items;
       return;
     }
+    const prevBp = prevBreakpointRef.current;
     const current = storeRef.current;
-    if (!current) {
-      const loaded = loadDashboard(initialSpec, { resolvedColumns });
-      setStore(loaded.store);
-      setPanels([...loaded.panels]);
+    if (
+      prevBp === currentBreakpoint &&
+      current?.getState().columns === resolvedColumns
+    ) {
       return;
     }
-    const state = current.getState();
-    if (state.columns === resolvedColumns) return;
-    const scaled = scaleLayout(state.items, state.columns, resolvedColumns);
-    setStore(
-      createLayoutStore({ items: scaled, columns: resolvedColumns }),
-    );
-  }, [initialSpec, resolvedColumns]);
+    if (current) {
+      layoutCacheRef.current[prevBp] = [...current.getState().items];
+    }
+    prevBreakpointRef.current = currentBreakpoint;
+    const loaded = loadDashboard(spec, {
+      resolvedColumns,
+      breakpointKey: currentBreakpoint,
+      layoutCache: layoutCacheRef.current,
+    });
+    const loadedItems = loaded.store.getState().items;
+    layoutCacheRef.current[currentBreakpoint] = [...loadedItems];
+    setStore(loaded.store);
+    setPanels([...loaded.panels]);
+  }, [initialSpec.id, resolvedColumns, currentBreakpoint]);
 
   const meta = useMemo(
     () => ({ id: initialSpec.id, title: initialSpec.title }),
@@ -132,16 +174,36 @@ export const DashboardRuntime = forwardRef<
   panelsRef.current = panels;
 
   const notifyChange = useCallback(() => {
+    const cache = layoutCacheRef.current;
+    const layoutsByBreakpoint =
+      Object.keys(cache).length > 0
+        ? (Object.fromEntries(
+            Object.entries(cache).map(([k, v]) => [k, { items: v }]),
+          ) as DashboardSpec["layoutsByBreakpoint"])
+        : initialSpec.layoutsByBreakpoint;
     onChange?.(
       serializeDashboard(store, panelsRef.current, meta, {
         breakpoints: initialSpec.breakpoints,
         columnsByBreakpoint: initialSpec.columnsByBreakpoint,
+        layoutsByBreakpoint,
       }),
     );
-  }, [onChange, store, meta, initialSpec.breakpoints, initialSpec.columnsByBreakpoint]);
+  }, [
+    onChange,
+    store,
+    meta,
+    initialSpec.breakpoints,
+    initialSpec.columnsByBreakpoint,
+    initialSpec.layoutsByBreakpoint,
+  ]);
 
   useEffect(() => {
-    const unsub = store.subscribe(notifyChange);
+    const unsub = store.subscribe(() => {
+      layoutCacheRef.current[currentBreakpointRef.current] = [
+        ...store.getState().items,
+      ];
+      notifyChange();
+    });
     return unsub;
   }, [store, notifyChange]);
 
@@ -158,7 +220,9 @@ export const DashboardRuntime = forwardRef<
           break;
         }
         case "duplicate": {
-          const item = store.getState().items.find((i: GridItem) => i.id === action.id);
+          const item = store
+            .getState()
+            .items.find((i: GridItem) => i.id === action.id);
           const config = panelsRef.current.find((p) => p.id === action.id);
           if (!item || !config) break;
           const newPanel = createEmptyPanel(config.type, "New panel");
@@ -199,7 +263,9 @@ export const DashboardRuntime = forwardRef<
     (type: string) => {
       const items = store.getState().items;
       const nextY =
-        items.length === 0 ? 0 : Math.max(...items.map((i: GridItem) => i.y + i.h));
+        items.length === 0
+          ? 0
+          : Math.max(...items.map((i: GridItem) => i.y + i.h));
       const newPanel = createEmptyPanel(type, "New panel");
       store.dispatch({
         type: "add",
@@ -218,14 +284,26 @@ export const DashboardRuntime = forwardRef<
     [store],
   );
 
-  const exportSpec = useCallback(
-    (): DashboardSpec =>
-      serializeDashboard(store, panelsRef.current, meta, {
-        breakpoints: initialSpec.breakpoints,
-        columnsByBreakpoint: initialSpec.columnsByBreakpoint,
-      }),
-    [store, meta, initialSpec.breakpoints, initialSpec.columnsByBreakpoint],
-  );
+  const exportSpec = useCallback((): DashboardSpec => {
+    const cache = layoutCacheRef.current;
+    const layoutsByBreakpoint =
+      Object.keys(cache).length > 0
+        ? (Object.fromEntries(
+            Object.entries(cache).map(([k, v]) => [k, { items: v }]),
+          ) as DashboardSpec["layoutsByBreakpoint"])
+        : initialSpec.layoutsByBreakpoint;
+    return serializeDashboard(store, panelsRef.current, meta, {
+      breakpoints: initialSpec.breakpoints,
+      columnsByBreakpoint: initialSpec.columnsByBreakpoint,
+      layoutsByBreakpoint,
+    });
+  }, [
+    store,
+    meta,
+    initialSpec.breakpoints,
+    initialSpec.columnsByBreakpoint,
+    initialSpec.layoutsByBreakpoint,
+  ]);
 
   useImperativeHandle(
     ref,

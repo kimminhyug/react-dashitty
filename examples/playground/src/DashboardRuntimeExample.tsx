@@ -4,14 +4,14 @@
  * ref로 addPanel / removePanel / export() 호출 가능 (툴바/단축키/저장 연동용).
  */
 
-import React, { useRef, useState } from "react";
 import {
-  DashboardRuntime,
-  type DashboardRuntimeHandle,
   createStaticDataSource,
   createWidgetRegistry,
+  DashboardRuntime,
+  type DashboardRuntimeHandle,
   type DashboardSpec,
 } from "dashboardity";
+import React, { useRef, useState } from "react";
 import { StatWidget, TextWidget } from "./widgets";
 
 const COLUMNS = 12;
@@ -78,7 +78,15 @@ export const DashboardRuntimeExample: React.FC = () => {
       }}
     >
       <h2 style={{ marginBottom: 12 }}>DashboardRuntime</h2>
-      <div style={{ marginBottom: 12, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+      <div
+        style={{
+          marginBottom: 12,
+          display: "flex",
+          gap: 16,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
         <button
           type="button"
           onClick={() => setMode((m) => (m === "edit" ? "view" : "edit"))}

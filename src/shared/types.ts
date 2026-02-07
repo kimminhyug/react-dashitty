@@ -77,16 +77,21 @@ export type ColumnsByBreakpoint = Partial<Record<BreakpointKey, number>> & {
   base: number;
 };
 
+/** 브레이크포인트별 레이아웃. 지정 시 해당 구간에서 스케일 대신 이 레이아웃 사용 */
+export type LayoutByBreakpoint = { items: GridItem[] };
+
 /**
  * 대시보드 공식 스펙. "대시보드 = JSON"
  * layout.items[].id === panels[].id 1:1. panels에는 좌표 없음.
  * breakpoints + columnsByBreakpoint 있으면 뷰포트 너비에 따라 columns 해석.
+ * layoutsByBreakpoint 있으면 해당 구간에서 layout 대신 그 레이아웃 사용(브레이크포인트별 배치).
  */
 export type DashboardSpec = {
   id: string;
   title: string;
   /** 현재 저장된 레이아웃의 열 수. columnsByBreakpoint 사용 시에도 직렬화 시 이 값으로 저장 */
   columns: number;
+  /** 기본/캐논칼 레이아웃. layoutsByBreakpoint 미지정 구간은 여기서 스케일 */
   layout: {
     items: GridItem[];
   };
@@ -95,6 +100,8 @@ export type DashboardSpec = {
   breakpoints?: BreakpointWidths;
   /** 브레이크포인트별 열 수. 지정 시 반응형 columns 적용 */
   columnsByBreakpoint?: ColumnsByBreakpoint;
+  /** 브레이크포인트별 레이아웃. 지정한 구간은 스케일 없이 이 배치 사용 */
+  layoutsByBreakpoint?: Partial<Record<BreakpointKey, LayoutByBreakpoint>>;
 };
 
 /** 편집 / 보기 모드 (Grafana 핵심 UX) */

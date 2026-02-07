@@ -1,6 +1,11 @@
 import type { LayoutStore } from "@dashboardity/layout-store";
 import { createLayoutStore } from "@dashboardity/layout-store";
-import type { DashboardSpec, PanelConfig } from "../shared";
+import type {
+  BreakpointKey,
+  DashboardSpec,
+  GridItem,
+  PanelConfig,
+} from "../shared";
 import {
   resolveColumns,
   scaleLayout,
@@ -24,14 +29,17 @@ export const createEmptyPanel = (
 
 /**
  * 라이브러리 레벨: store + panels + meta → JSON 스펙.
- * 순서 보존, deterministic, side-effect 없음.
- * breakpoints/columnsByBreakpoint가 있으면 그대로 직렬화(저장 시 현재 columns 사용).
+ * breakpoints/columnsByBreakpoint/layoutsByBreakpoint 있으면 그대로 직렬화.
+ * layoutCache: 현재 브레이크포인트 포함 편집된 구간별 레이아웃(merge되어 출력).
  */
 export const serializeDashboard = (
   store: LayoutStore,
   panels: PanelConfig[],
   meta: { id: string; title: string },
-  specOverrides?: Pick<DashboardSpec, "breakpoints" | "columnsByBreakpoint">,
+  specOverrides?: Pick<
+    DashboardSpec,
+    "breakpoints" | "columnsByBreakpoint" | "layoutsByBreakpoint"
+  >,
 ): DashboardSpec => {
   const state = store.getState();
   const base: DashboardSpec = {
@@ -46,6 +54,8 @@ export const serializeDashboard = (
   if (specOverrides?.breakpoints) base.breakpoints = specOverrides.breakpoints;
   if (specOverrides?.columnsByBreakpoint)
     base.columnsByBreakpoint = specOverrides.columnsByBreakpoint;
+  if (specOverrides?.layoutsByBreakpoint != null)
+    base.layoutsByBreakpoint = specOverrides.layoutsByBreakpoint;
   return base;
 };
 
@@ -54,11 +64,32 @@ export type LoadDashboardOptions = {
   width?: number;
   /** 이미 해석된 열 수. 지정 시 width 무시하고 이 값으로 스토어 생성 */
   resolvedColumns?: number;
+  /** 현재 브레이크포인트. layoutsByBreakpoint[breakpointKey] 있으면 그 레이아웃 사용 */
+  breakpointKey?: BreakpointKey;
+  /** 런타임 캐시(구간별 레이아웃). breakpointKey에 대한 캐시가 있으면 spec보다 우선 */
+  layoutCache?: Partial<Record<BreakpointKey, GridItem[]>>;
+};
+
+const getItemsForBreakpoint = (
+  spec: DashboardSpec,
+  breakpointKey: BreakpointKey,
+  resolvedColumns: number,
+  layoutCache?: Partial<Record<BreakpointKey, GridItem[]>>,
+): GridItem[] => {
+  const cached = layoutCache?.[breakpointKey];
+  if (cached != null && cached.length > 0) return [...cached];
+  const byBp = spec.layoutsByBreakpoint?.[breakpointKey]?.items;
+  if (byBp != null && byBp.length > 0) return [...byBp];
+  return scaleLayout(
+    spec.layout.items,
+    spec.columns,
+    resolvedColumns,
+  );
 };
 
 /**
  * JSON 스펙 → store + panels 복원.
- * spec.columnsByBreakpoint + breakpoints 있으면 width 또는 resolvedColumns로 열 수 해석 후 레이아웃 스케일.
+ * layoutsByBreakpoint 또는 layoutCache로 해당 구간 레이아웃 사용, 없으면 layout 스케일.
  */
 export const loadDashboard = (
   spec: DashboardSpec,
@@ -71,10 +102,13 @@ export const loadDashboard = (
     (options?.width != null
       ? resolveColumns(options.width, colConfig, spec.breakpoints)
       : savedColumns);
-  const items =
-    resolved !== savedColumns
-      ? scaleLayout(spec.layout.items, savedColumns, resolved)
-      : [...spec.layout.items];
+  const breakpointKey = options?.breakpointKey ?? "xl";
+  const items = getItemsForBreakpoint(
+    spec,
+    breakpointKey,
+    resolved,
+    options?.layoutCache,
+  );
   const store = createLayoutStore({
     items,
     columns: resolved,
