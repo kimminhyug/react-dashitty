@@ -1,6 +1,10 @@
 import type { LayoutStore } from "@dashboardity/layout-store";
 import { createLayoutStore } from "@dashboardity/layout-store";
 import type { DashboardSpec, PanelConfig } from "../shared";
+import {
+  resolveColumns,
+  scaleLayout,
+} from "../shared/breakpoints";
 
 const generatePanelId = (): string =>
   `panel-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -21,14 +25,16 @@ export const createEmptyPanel = (
 /**
  * 라이브러리 레벨: store + panels + meta → JSON 스펙.
  * 순서 보존, deterministic, side-effect 없음.
+ * breakpoints/columnsByBreakpoint가 있으면 그대로 직렬화(저장 시 현재 columns 사용).
  */
 export const serializeDashboard = (
   store: LayoutStore,
   panels: PanelConfig[],
   meta: { id: string; title: string },
+  specOverrides?: Pick<DashboardSpec, "breakpoints" | "columnsByBreakpoint">,
 ): DashboardSpec => {
   const state = store.getState();
-  return {
+  const base: DashboardSpec = {
     id: meta.id,
     title: meta.title,
     columns: state.columns,
@@ -37,17 +43,41 @@ export const serializeDashboard = (
     },
     panels: [...panels],
   };
+  if (specOverrides?.breakpoints) base.breakpoints = specOverrides.breakpoints;
+  if (specOverrides?.columnsByBreakpoint)
+    base.columnsByBreakpoint = specOverrides.columnsByBreakpoint;
+  return base;
+};
+
+export type LoadDashboardOptions = {
+  /** 뷰포트/컨테이너 너비(px). columnsByBreakpoint 있을 때 이 너비로 열 수 해석 */
+  width?: number;
+  /** 이미 해석된 열 수. 지정 시 width 무시하고 이 값으로 스토어 생성 */
+  resolvedColumns?: number;
 };
 
 /**
  * JSON 스펙 → store + panels 복원.
+ * spec.columnsByBreakpoint + breakpoints 있으면 width 또는 resolvedColumns로 열 수 해석 후 레이아웃 스케일.
  */
 export const loadDashboard = (
   spec: DashboardSpec,
+  options?: LoadDashboardOptions,
 ): { store: LayoutStore; panels: PanelConfig[] } => {
+  const savedColumns = spec.columns;
+  const colConfig = spec.columnsByBreakpoint ?? savedColumns;
+  const resolved =
+    options?.resolvedColumns ??
+    (options?.width != null
+      ? resolveColumns(options.width, colConfig, spec.breakpoints)
+      : savedColumns);
+  const items =
+    resolved !== savedColumns
+      ? scaleLayout(spec.layout.items, savedColumns, resolved)
+      : [...spec.layout.items];
   const store = createLayoutStore({
-    items: [...spec.layout.items],
-    columns: spec.columns,
+    items,
+    columns: resolved,
   });
   const panels: PanelConfig[] = [...spec.panels];
   return { store, panels };

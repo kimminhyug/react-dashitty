@@ -64,18 +64,37 @@ export type PanelConfig = {
   containerStyle?: CSSProperties;
 };
 
+/** 브레이크포인트 이름 (base = 0px, sm/md/lg/xl = 해당 width 이상) */
+export type BreakpointKey = "base" | "sm" | "md" | "lg" | "xl";
+
+/** 브레이크포인트별 최소 너비(px). base는 0으로 고정. */
+export type BreakpointWidths = Partial<
+  Record<Exclude<BreakpointKey, "base">, number>
+>;
+
+/** 브레이크포인트별 그리드 열 수. base 필수, 나머지 선택. */
+export type ColumnsByBreakpoint = Partial<Record<BreakpointKey, number>> & {
+  base: number;
+};
+
 /**
  * 대시보드 공식 스펙. "대시보드 = JSON"
  * layout.items[].id === panels[].id 1:1. panels에는 좌표 없음.
+ * breakpoints + columnsByBreakpoint 있으면 뷰포트 너비에 따라 columns 해석.
  */
 export type DashboardSpec = {
   id: string;
   title: string;
+  /** 현재 저장된 레이아웃의 열 수. columnsByBreakpoint 사용 시에도 직렬화 시 이 값으로 저장 */
   columns: number;
   layout: {
     items: GridItem[];
   };
   panels: PanelConfig[];
+  /** 브레이크포인트 너비(px). 미지정 시 기본값 사용 */
+  breakpoints?: BreakpointWidths;
+  /** 브레이크포인트별 열 수. 지정 시 반응형 columns 적용 */
+  columnsByBreakpoint?: ColumnsByBreakpoint;
 };
 
 /** 편집 / 보기 모드 (Grafana 핵심 UX) */

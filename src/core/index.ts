@@ -13,6 +13,9 @@ export {
 export { Panel } from "./Panel";
 export { PanelOptionEditor } from "./PanelOptionEditor";
 export type {
+  BreakpointKey,
+  BreakpointWidths,
+  ColumnsByBreakpoint,
   DashboardGridOptions,
   DashboardMode,
   DashboardSpec,
@@ -29,7 +32,14 @@ export type {
   WidgetProps,
   WidgetRegistry,
 } from "../shared";
-export { useResponsiveGrid } from "./useResponsiveGrid";
+export {
+  DEFAULT_BREAKPOINT_WIDTHS,
+  getBreakpointKey,
+  resolveColumns,
+  scaleLayout,
+} from "../shared/breakpoints";
+export type { LoadDashboardOptions } from "./DashboardSerializer";
+export { useContainerWidth, useResponsiveGrid } from "./useResponsiveGrid";
 export type {
   ResponsiveGridSize,
   UseResponsiveGridOptions,

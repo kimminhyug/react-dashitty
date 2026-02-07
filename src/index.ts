@@ -1,5 +1,11 @@
 /** Core: Dashboard, Runtime, Serializer, Panel, Widget Registry */
 export {
+  DEFAULT_BREAKPOINT_WIDTHS,
+  getBreakpointKey,
+  resolveColumns,
+  scaleLayout,
+} from "./shared/breakpoints";
+export {
   Dashboard,
   DashboardRuntime,
   createEmptyPanel,
@@ -7,6 +13,7 @@ export {
   serializeDashboard,
   Panel,
   PanelOptionEditor,
+  useContainerWidth,
   useResponsiveGrid,
   createWidgetRegistry,
   FallbackWidget,
@@ -20,6 +27,7 @@ export type {
   DashboardSpec,
   DataSource,
   GridItem,
+  LoadDashboardOptions,
   PanelAction,
   PanelConfig,
   PanelOptionEditorProps,

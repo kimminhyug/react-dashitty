@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createLayoutStore } from "@dashboardity/layout-store";
 import { Dashboard } from "./Dashboard";
 import {
   createEmptyPanel,
@@ -14,6 +15,8 @@ import {
   serializeDashboard,
 } from "./DashboardSerializer";
 import { PanelOptionEditor } from "./PanelOptionEditor";
+import { useContainerWidth } from "./useResponsiveGrid";
+import { resolveColumns, scaleLayout } from "../shared/breakpoints";
 import type {
   DashboardGridOptions,
   DashboardSpec,
@@ -72,10 +75,54 @@ export const DashboardRuntime = forwardRef<
   const mode = modeProp ?? "view";
   const isEdit = mode === "edit";
 
-  const [loaded] = useState(() => loadDashboard(initialSpec));
-  const store = loaded.store;
-  const [panels, setPanels] = useState<PanelConfig[]>(() => [...loaded.panels]);
+  const gridWrapRef = useRef<HTMLDivElement>(null);
+  const containerWidth = useContainerWidth(gridWrapRef);
+  const resolvedColumns = useMemo(() => {
+    const colConfig =
+      initialSpec.columnsByBreakpoint ?? initialSpec.columns;
+    const width =
+      containerWidth ||
+      (typeof window !== "undefined" ? window.innerWidth : 1024);
+    return resolveColumns(width, colConfig, initialSpec.breakpoints);
+  }, [
+    containerWidth,
+    initialSpec.columns,
+    initialSpec.columnsByBreakpoint,
+    initialSpec.breakpoints,
+  ]);
+
+  const [store, setStore] = useState(() => loadDashboard(initialSpec).store);
+  const [panels, setPanels] = useState<PanelConfig[]>(() => [
+    ...loadDashboard(initialSpec).panels,
+  ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
+  const specIdRef = useRef(initialSpec.id);
+  const storeRef = useRef(store);
+  storeRef.current = store;
+
+  useEffect(() => {
+    if (resolvedColumns < 1) return;
+    if (specIdRef.current !== initialSpec.id) {
+      specIdRef.current = initialSpec.id;
+      const loaded = loadDashboard(initialSpec, { resolvedColumns });
+      setStore(loaded.store);
+      setPanels([...loaded.panels]);
+      return;
+    }
+    const current = storeRef.current;
+    if (!current) {
+      const loaded = loadDashboard(initialSpec, { resolvedColumns });
+      setStore(loaded.store);
+      setPanels([...loaded.panels]);
+      return;
+    }
+    const state = current.getState();
+    if (state.columns === resolvedColumns) return;
+    const scaled = scaleLayout(state.items, state.columns, resolvedColumns);
+    setStore(
+      createLayoutStore({ items: scaled, columns: resolvedColumns }),
+    );
+  }, [initialSpec, resolvedColumns]);
 
   const meta = useMemo(
     () => ({ id: initialSpec.id, title: initialSpec.title }),
@@ -85,8 +132,13 @@ export const DashboardRuntime = forwardRef<
   panelsRef.current = panels;
 
   const notifyChange = useCallback(() => {
-    onChange?.(serializeDashboard(store, panelsRef.current, meta));
-  }, [onChange, store, meta]);
+    onChange?.(
+      serializeDashboard(store, panelsRef.current, meta, {
+        breakpoints: initialSpec.breakpoints,
+        columnsByBreakpoint: initialSpec.columnsByBreakpoint,
+      }),
+    );
+  }, [onChange, store, meta, initialSpec.breakpoints, initialSpec.columnsByBreakpoint]);
 
   useEffect(() => {
     const unsub = store.subscribe(notifyChange);
@@ -167,8 +219,12 @@ export const DashboardRuntime = forwardRef<
   );
 
   const exportSpec = useCallback(
-    (): DashboardSpec => serializeDashboard(store, panelsRef.current, meta),
-    [store, meta],
+    (): DashboardSpec =>
+      serializeDashboard(store, panelsRef.current, meta, {
+        breakpoints: initialSpec.breakpoints,
+        columnsByBreakpoint: initialSpec.columnsByBreakpoint,
+      }),
+    [store, meta, initialSpec.breakpoints, initialSpec.columnsByBreakpoint],
   );
 
   useImperativeHandle(
@@ -219,7 +275,7 @@ export const DashboardRuntime = forwardRef<
 
   return (
     <div className={className} style={{ ...style, ...layoutStyle }}>
-      <div style={gridWrapStyle}>
+      <div ref={gridWrapRef} style={gridWrapStyle}>
         {isEdit && (
           <div style={{ marginBottom: 8 }}>
             <button
@@ -233,7 +289,7 @@ export const DashboardRuntime = forwardRef<
         )}
         <Dashboard
           store={store}
-          columns={initialSpec.columns}
+          columns={resolvedColumns}
           panelConfigs={panels}
           dataSource={dataSource}
           widgets={widgets}
