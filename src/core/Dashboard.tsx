@@ -1,6 +1,6 @@
 import type { LayoutStore } from "@dashboardity/layout-store";
 import React, { useMemo, useRef } from "react";
-import { GridLayout } from "react-griditty";
+import { GridLayout, } from "react-griditty";
 import { Panel } from "./Panel";
 import type {
   DashboardGridOptions,
@@ -28,6 +28,9 @@ const getWidgetComponent = (
 export type DashboardProps = {
   store: LayoutStore;
   columns: number;
+  /** 전달 시 반응형을 부모(Runtime) 기준으로 사용. 미전달 시 내부 containerRef로 계산 */
+  cellWidth?: number;
+  cellHeight?: number;
   /** item.id로 조회. JSON 직렬화 가능한 설정만 포함 (layout 제외) */
   panelConfigs: PanelConfig[];
   dataSource: DataSource;
@@ -58,6 +61,8 @@ const cn = (...parts: (string | undefined)[]) =>
 export const Dashboard: React.FC<DashboardProps> = ({
   store,
   columns,
+  cellWidth: cellWidthProp,
+  cellHeight: cellHeightProp,
   panelConfigs,
   dataSource,
   widgets,
@@ -71,10 +76,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   style,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { cellWidth, cellHeight } = useResponsiveGrid(containerRef, {
+  const responsiveSize = useResponsiveGrid(containerRef, {
     columns,
     rowHeight,
   });
+  const cellWidth =
+    cellWidthProp != null ? cellWidthProp : responsiveSize.cellWidth;
+  const cellHeight =
+    cellHeightProp != null ? cellHeightProp : responsiveSize.cellHeight;
   const isEdit = mode === "edit";
 
   const configById = useMemo(

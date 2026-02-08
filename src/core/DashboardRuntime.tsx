@@ -31,7 +31,7 @@ import {
   serializeDashboard,
 } from "./DashboardSerializer";
 import { PanelOptionEditor } from "./PanelOptionEditor";
-import { useContainerWidth } from "./useResponsiveGrid";
+import { useContainerWidth, useResponsiveGrid } from "./useResponsiveGrid";
 
 const getWidgetSchema = (
   entry: WidgetRegistry[string] | undefined,
@@ -82,6 +82,12 @@ export const DashboardRuntime = forwardRef<
 
   const gridWrapRef = useRef<HTMLDivElement>(null);
   const containerWidth = useContainerWidth(gridWrapRef);
+  const colConfig = initialSpec.columnsByBreakpoint ?? initialSpec.columns;
+  const responsiveSize = useResponsiveGrid(gridWrapRef, {
+    columns: colConfig,
+    breakpoints: initialSpec.breakpoints,
+    rowHeight,
+  });
   const widthForBreakpoint =
     containerWidth ||
     (typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -368,6 +374,8 @@ export const DashboardRuntime = forwardRef<
         <Dashboard
           store={store}
           columns={resolvedColumns}
+          cellWidth={responsiveSize.cellWidth}
+          cellHeight={responsiveSize.cellHeight}
           panelConfigs={panels}
           dataSource={dataSource}
           widgets={widgets}

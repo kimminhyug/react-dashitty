@@ -1,6 +1,6 @@
 {
   "name": "dashboardity",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Dashboard library: grid layout, panels, widgets, app shell",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
