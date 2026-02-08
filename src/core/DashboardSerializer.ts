@@ -76,9 +76,17 @@ const getItemsForBreakpoint = (
   resolvedColumns: number,
   layoutCache?: Partial<Record<BreakpointKey, GridItem[]>>,
 ): GridItem[] => {
-  const cached = layoutCache?.[breakpointKey];
-  if (cached != null && cached.length > 0) return [...cached];
   const byBp = spec.layoutsByBreakpoint?.[breakpointKey]?.items;
+  const cached = layoutCache?.[breakpointKey];
+  if (breakpointKey === "base" && resolvedColumns === 1) {
+    const baseLooksLikeOneCol = byBp != null && byBp.length > 0 && !byBp.some((item) => item.w > 1);
+    if (baseLooksLikeOneCol) return [...byBp];
+    if (cached != null && cached.length > 0 && !cached.some((item) => item.w > 1)) {
+      return [...cached];
+    }
+    return scaleLayout(spec.layout.items, spec.columns, resolvedColumns);
+  }
+  if (cached != null && cached.length > 0) return [...cached];
   if (byBp != null && byBp.length > 0) return [...byBp];
   return scaleLayout(
     spec.layout.items,

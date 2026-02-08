@@ -15,13 +15,16 @@ const BREAKPOINT_ORDER: BreakpointKey[] = ["base", "sm", "md", "lg", "xl"];
 
 /**
  * 뷰포트 너비(px)와 브레이크포인트 설정으로 현재 브레이크포인트 키 반환.
- * width >= 해당 구간 최소값인 가장 큰 브레이크포인트.
+ * 스펙에 breakpoints.base(숫자)가 있으면 width < base 일 때만 "base" 사용.
+ * 없으면 width < sm 일 때 "base". 그 외는 width >= 해당 구간 최소값인 가장 큰 키.
  */
 export const getBreakpointKey = (
   widthPx: number,
   breakpoints: BreakpointWidths = {},
 ): BreakpointKey => {
   const widths = { ...DEFAULT_BREAKPOINT_WIDTHS, ...breakpoints };
+  const baseMax = (widths as Partial<Record<BreakpointKey, number>>).base;
+  if (baseMax != null && widthPx < baseMax) return "base";
   let current: BreakpointKey = "base";
   for (const key of BREAKPOINT_ORDER) {
     if (key === "base") continue;

@@ -67,10 +67,8 @@ export type PanelConfig = {
 /** 브레이크포인트 이름 (base = 0px, sm/md/lg/xl = 해당 width 이상) */
 export type BreakpointKey = "base" | "sm" | "md" | "lg" | "xl";
 
-/** 브레이크포인트별 최소 너비(px). base는 0으로 고정. */
-export type BreakpointWidths = Partial<
-  Record<Exclude<BreakpointKey, "base">, number>
->;
+/** 브레이크포인트별 너비(px). sm~xl은 해당 구간 최소 너비, base는 선택 시 "base 구간 최대 너비"(width < base 이면 base 적용). */
+export type BreakpointWidths = Partial<Record<BreakpointKey, number>>;
 
 /** 브레이크포인트별 그리드 열 수. base 필수, 나머지 선택. */
 export type ColumnsByBreakpoint = Partial<Record<BreakpointKey, number>> & {

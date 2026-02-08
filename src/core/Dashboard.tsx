@@ -31,6 +31,8 @@ export type DashboardProps = {
   /** 전달 시 반응형을 부모(Runtime) 기준으로 사용. 미전달 시 내부 containerRef로 계산 */
   cellWidth?: number;
   cellHeight?: number;
+  /** cellWidth/cellHeight 전달 시 함께 전달 권장. GridLayout 열 수 = containerWidth/cellWidth 와 일치해야 함 */
+  containerWidth?: number;
   /** item.id로 조회. JSON 직렬화 가능한 설정만 포함 (layout 제외) */
   panelConfigs: PanelConfig[];
   dataSource: DataSource;
@@ -51,8 +53,10 @@ export type DashboardProps = {
 
 const dashboardRootStyle: React.CSSProperties = {
   width: "100%",
+  maxWidth: "100%",
   minWidth: 0,
   minHeight: 200,
+  overflow: "visible",
 };
 
 const cn = (...parts: (string | undefined)[]) =>
@@ -63,6 +67,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   columns,
   cellWidth: cellWidthProp,
   cellHeight: cellHeightProp,
+  containerWidth: containerWidthProp,
   panelConfigs,
   dataSource,
   widgets,
@@ -84,6 +89,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     cellWidthProp != null ? cellWidthProp : responsiveSize.cellWidth;
   const cellHeight =
     cellHeightProp != null ? cellHeightProp : responsiveSize.cellHeight;
+  const containerWidthForGrid =
+    containerWidthProp ?? responsiveSize.containerWidth;
   const isEdit = mode === "edit";
   const canRenderGrid = cellWidth > 0 && cellHeight > 0;
 
@@ -152,8 +159,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {canRenderGrid ? (
         <GridLayout
           store={store}
+          columns={columns}
           cellWidth={cellWidth}
           cellHeight={cellHeight}
+          containerWidth={containerWidthForGrid}
           resizeHandle={gridOptions?.resizeHandle}
           showGrid={Boolean(gridOptions?.showGrid)}
           draggable={isEdit}

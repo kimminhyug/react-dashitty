@@ -47,8 +47,12 @@ export type DashboardRuntimeProps = {
   widgets: WidgetRegistry;
   dataSource: DataSource;
   mode?: "view" | "edit";
+  /** 지정 시 컨테이너 너비 무시하고 이 브레이크포인트(열 수·레이아웃) 고정. 모달 등에서 사용 */
+  forceBreakpoint?: BreakpointKey;
   /** 레이아웃/패널 변경 시 직렬화된 스펙 전달 (저장/서버 연동용) */
   onChange?: (spec: DashboardSpec) => void;
+  /** 실제 적용 중인 breakpoint 변경 시 호출 (로그/배지 등 표시용) */
+  onBreakpointChange?: (key: BreakpointKey, width: number) => void;
   rowHeight?: number;
   gridOptions?: DashboardGridOptions;
   className?: string;
@@ -74,7 +78,9 @@ export const DashboardRuntime = forwardRef<
     widgets,
     dataSource,
     mode: modeProp = "view",
+    forceBreakpoint,
     onChange,
+    onBreakpointChange,
     rowHeight,
     gridOptions,
     className,
@@ -92,14 +98,29 @@ export const DashboardRuntime = forwardRef<
     breakpoints: initialSpec.breakpoints,
     rowHeight,
   });
-  /** 0이면 window 폭백 없이 작은 기본값만 사용 → 측정 후 ResizeObserver로 갱신 */
-  const widthForBreakpoint =
-    containerWidth > 0 ? containerWidth : 320;
+  /** 측정 전(0)이면 뷰포트 너비로 폴백. 소수 너비는 정수로 반올림해 breakpoint/effect 안정화 */
+  const widthForBreakpoint = Math.round(
+    containerWidth > 0
+      ? containerWidth
+      : typeof document !== "undefined"
+        ? Math.min(document.documentElement.clientWidth, 1600)
+        : 1280,
+  );
   const currentBreakpoint = useMemo(
-    () => getBreakpointKey(widthForBreakpoint, initialSpec.breakpoints),
-    [widthForBreakpoint, initialSpec.breakpoints],
+    () =>
+      forceBreakpoint ??
+      getBreakpointKey(widthForBreakpoint, initialSpec.breakpoints),
+    [forceBreakpoint, widthForBreakpoint, initialSpec.breakpoints],
   );
   const resolvedColumns = useMemo(() => {
+    if (forceBreakpoint != null) {
+      const colConfig = initialSpec.columnsByBreakpoint ?? initialSpec.columns;
+      const byBp =
+        typeof colConfig === "object"
+          ? colConfig[forceBreakpoint]
+          : undefined;
+      return byBp ?? initialSpec.columns;
+    }
     const colConfig = initialSpec.columnsByBreakpoint ?? initialSpec.columns;
     return resolveColumns(
       widthForBreakpoint,
@@ -107,6 +128,7 @@ export const DashboardRuntime = forwardRef<
       initialSpec.breakpoints,
     );
   }, [
+    forceBreakpoint,
     widthForBreakpoint,
     initialSpec.columns,
     initialSpec.columnsByBreakpoint,
@@ -116,15 +138,59 @@ export const DashboardRuntime = forwardRef<
   const initialSpecRef = useRef(initialSpec);
   initialSpecRef.current = initialSpec;
 
-  const [store, setStore] = useState(() => loadDashboard(initialSpec).store);
+  const loadOptsForBreakpoint = useMemo(() => {
+    if (forceBreakpoint == null) return undefined;
+    const cols =
+      (initialSpec.columnsByBreakpoint as Record<string, number>)?.[
+        forceBreakpoint
+      ] ?? initialSpec.columns;
+    return {
+      breakpointKey: forceBreakpoint,
+      resolvedColumns: cols,
+    };
+  }, [forceBreakpoint, initialSpec.columnsByBreakpoint, initialSpec.columns]);
+
+  /** 첫 페인트부터 현재 너비 기준 브레이크포인트 레이아웃 사용(undefined면 뷰포트 너비로 계산) */
+  const getInitialLoadOpts = useCallback(() => {
+    if (loadOptsForBreakpoint != null) return loadOptsForBreakpoint;
+    const w =
+      typeof document !== "undefined"
+        ? Math.round(
+            Math.min(document.documentElement.clientWidth ?? 1280, 1600),
+          )
+        : 1280;
+    const colConfig =
+      initialSpec.columnsByBreakpoint ?? initialSpec.columns;
+    const bp = getBreakpointKey(w, initialSpec.breakpoints);
+    const cols = resolveColumns(
+      w,
+      colConfig,
+      initialSpec.breakpoints ?? undefined,
+    );
+    return {
+      breakpointKey: bp,
+      resolvedColumns: cols,
+    };
+  }, [
+    loadOptsForBreakpoint,
+    initialSpec.breakpoints,
+    initialSpec.columnsByBreakpoint,
+    initialSpec.columns,
+  ]);
+
+  const [store, setStore] = useState(() =>
+    loadDashboard(initialSpec, getInitialLoadOpts()).store,
+  );
   const [panels, setPanels] = useState<PanelConfig[]>(() => [
-    ...loadDashboard(initialSpec).panels,
+    ...loadDashboard(initialSpec, getInitialLoadOpts()).panels,
   ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const specIdRef = useRef(initialSpec.id);
   const storeRef = useRef(store);
   storeRef.current = store;
-  const prevBreakpointRef = useRef<BreakpointKey>(currentBreakpoint);
+  const prevBreakpointRef = useRef<BreakpointKey>(
+    forceBreakpoint ?? currentBreakpoint,
+  );
   const layoutCacheRef = useRef<Partial<Record<BreakpointKey, GridItem[]>>>({});
   const currentBreakpointRef = useRef(currentBreakpoint);
   currentBreakpointRef.current = currentBreakpoint;
@@ -175,6 +241,26 @@ export const DashboardRuntime = forwardRef<
     setStore(loaded.store);
     setPanels([...loaded.panels]);
   }, [initialSpec.id, resolvedColumns, currentBreakpoint]);
+
+  const onBreakpointChangeRef = useRef(onBreakpointChange);
+  onBreakpointChangeRef.current = onBreakpointChange;
+  const lastReportedRef = useRef<{ key: BreakpointKey; width: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    const last = lastReportedRef.current;
+    if (
+      last?.key === currentBreakpoint &&
+      last?.width === widthForBreakpoint
+    ) {
+      return;
+    }
+    lastReportedRef.current = {
+      key: currentBreakpoint,
+      width: widthForBreakpoint,
+    };
+    onBreakpointChangeRef.current?.(currentBreakpoint, widthForBreakpoint);
+  }, [currentBreakpoint, widthForBreakpoint]);
 
   const meta = useMemo(
     () => ({ id: initialSpec.id, title: initialSpec.title }),
@@ -357,10 +443,13 @@ export const DashboardRuntime = forwardRef<
     width: "100%",
     minWidth: 0,
   };
-  /** flex 자식이 0으로 줄어들면 패널이 안 그려지므로 최소 너비 보장 */
+  /** flex 자식이 0으로 줄어들면 패널이 안 그려지므로 최소 너비 보장. 세로 스크롤 허용 */
   const gridWrapStyle: React.CSSProperties = {
     flex: 1,
     minWidth: isEdit ? 320 : 0,
+    minHeight: 0,
+    maxWidth: "100%",
+    overflow: "auto",
   };
   const sidePanelStyle: React.CSSProperties = {
     width: 260,
@@ -388,8 +477,17 @@ export const DashboardRuntime = forwardRef<
         <Dashboard
           store={store}
           columns={resolvedColumns}
-          cellWidth={responsiveSize.cellWidth}
-          cellHeight={responsiveSize.cellHeight}
+          cellWidth={
+            resolvedColumns > 0
+              ? responsiveSize.containerWidth / resolvedColumns
+              : responsiveSize.cellWidth
+          }
+          cellHeight={
+            resolvedColumns > 0
+              ? rowHeight ?? responsiveSize.containerWidth / resolvedColumns
+              : responsiveSize.cellHeight
+          }
+          containerWidth={responsiveSize.containerWidth}
           panelConfigs={panels}
           dataSource={dataSource}
           widgets={widgets}

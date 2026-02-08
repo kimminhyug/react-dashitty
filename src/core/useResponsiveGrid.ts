@@ -5,6 +5,10 @@ import type { BreakpointWidths, ColumnsByBreakpoint } from "../shared/types";
 /** 측정 전·오류 시(너비 0) 사용할 폴백 너비. 0을 GridLayout에 넘기지 않기 위함 */
 const FALLBACK_WIDTH = 320;
 
+/** flex 등으로 부모가 비정상 확장될 때 쓰는 상한. 뷰포트 너비로 제한 */
+const getViewportWidth = (): number =>
+  typeof document !== "undefined" ? document.documentElement.clientWidth : 0;
+
 /** 컨테이너 너비(px). ResizeObserver로 갱신. 초기 0일 수 있음. */
 export const useContainerWidth = (
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -15,7 +19,7 @@ export const useContainerWidth = (
     if (!el) return;
     const update = (): void =>
       setWidth((w) => {
-        const next = el.getBoundingClientRect().width;
+        const next = Math.round(el.getBoundingClientRect().width);
         return w === next ? w : next;
       });
     update(); // 즉시 1회
@@ -53,6 +57,8 @@ export type ResponsiveGridSize = {
   cellHeight: number;
   /** 현재 너비에서 해석된 열 수 (store.columns와 일치해야 함) */
   columns: number;
+  /** 레이아웃 계산에 쓴 실제 너비(뷰포트 클램프 적용). 그리드 컨테이너 너비로 사용 권장 */
+  containerWidth: number;
 };
 
 /** 초기 측정 전까지 쓰는 값. 폴백 너비 기준으로 계산해 0을 넘기지 않음 */
@@ -74,6 +80,7 @@ export const useResponsiveGrid = (
       cellWidth: cell,
       cellHeight: rowHeight ?? cell,
       columns: c,
+      containerWidth: FALLBACK_WIDTH,
     };
   });
   const update = useCallback(() => {
@@ -81,8 +88,16 @@ export const useResponsiveGrid = (
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const measuredWidth = rect.width;
-    const effectiveWidth =
-      measuredWidth > 0 ? measuredWidth : FALLBACK_WIDTH;
+    const viewportW = getViewportWidth();
+    const rawWidth =
+      measuredWidth > 0
+        ? measuredWidth
+        : viewportW > 0
+          ? Math.min(viewportW, 1600)
+          : FALLBACK_WIDTH;
+    const effectiveWidth = Math.round(
+      viewportW > 0 ? Math.min(rawWidth, viewportW) : rawWidth,
+    );
     const resolvedColumns = resolveColumns(
       effectiveWidth,
       columns,
@@ -94,8 +109,14 @@ export const useResponsiveGrid = (
     setSize((prev) =>
       prev.cellWidth !== cellWidth ||
       prev.cellHeight !== cellHeight ||
-      prev.columns !== resolvedColumns
-        ? { cellWidth, cellHeight, columns: resolvedColumns }
+      prev.columns !== resolvedColumns ||
+      prev.containerWidth !== effectiveWidth
+        ? {
+            cellWidth,
+            cellHeight,
+            columns: resolvedColumns,
+            containerWidth: effectiveWidth,
+          }
         : prev,
     );
   }, [containerRef, columns, breakpoints, rowHeight]);
