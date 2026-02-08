@@ -357,10 +357,10 @@ export const DashboardRuntime = forwardRef<
     width: "100%",
     minWidth: 0,
   };
-  /** flex 자식이 부모보다 넓게 잡히지 않도록 minWidth: 0 → ResizeObserver가 축소 시에도 반영 */
+  /** flex 자식이 0으로 줄어들면 패널이 안 그려지므로 최소 너비 보장 */
   const gridWrapStyle: React.CSSProperties = {
     flex: 1,
-    minWidth: 0,
+    minWidth: isEdit ? 320 : 0,
   };
   const sidePanelStyle: React.CSSProperties = {
     width: 260,

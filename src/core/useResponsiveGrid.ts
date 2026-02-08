@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { resolveColumns } from "../shared/breakpoints";
 import type { BreakpointWidths, ColumnsByBreakpoint } from "../shared/types";
 
-/** 반응형 계산 시 사용할 최소 셀 크기 (0이 되면 그리드가 안 보임) */
-const MIN_CELL = 24;
+/** 측정 전·오류 시(너비 0) 사용할 폴백 너비. 0을 GridLayout에 넘기지 않기 위함 */
+const FALLBACK_WIDTH = 320;
 
 /** 컨테이너 너비(px). ResizeObserver로 갱신. 초기 0일 수 있음. */
 export const useContainerWidth = (
@@ -55,29 +55,42 @@ export type ResponsiveGridSize = {
   columns: number;
 };
 
-/** 초기 측정 전까지 쓰는 작은 값 → 잘못된 큰 그리드 너비 연쇄 방지 */
-const INITIAL_COLUMNS = 1;
+/** 초기 측정 전까지 쓰는 값. 폴백 너비 기준으로 계산해 0을 넘기지 않음 */
+const INITIAL_COLUMNS = 12;
 
 export const useResponsiveGrid = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   options: UseResponsiveGridOptions,
 ): ResponsiveGridSize => {
   const { columns, breakpoints, rowHeight } = options;
-  const [size, setSize] = useState<ResponsiveGridSize>(() => ({
-    cellWidth: MIN_CELL,
-    cellHeight: rowHeight ?? MIN_CELL,
-    columns: INITIAL_COLUMNS,
-  }));
+  const [size, setSize] = useState<ResponsiveGridSize>(() => {
+    const cols =
+      typeof columns === "number"
+        ? columns
+        : resolveColumns(FALLBACK_WIDTH, columns, breakpoints);
+    const c = cols < 1 ? 12 : cols;
+    const cell = FALLBACK_WIDTH / c;
+    return {
+      cellWidth: cell,
+      cellHeight: rowHeight ?? cell,
+      columns: c,
+    };
+  });
   const update = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const width = rect.width;
-    const resolvedColumns = resolveColumns(width, columns, breakpoints);
+    const measuredWidth = rect.width;
+    const effectiveWidth =
+      measuredWidth > 0 ? measuredWidth : FALLBACK_WIDTH;
+    const resolvedColumns = resolveColumns(
+      effectiveWidth,
+      columns,
+      breakpoints,
+    );
     if (resolvedColumns < 1) return;
-    const rawCellWidth = width / resolvedColumns;
-    const cellWidth = Math.max(MIN_CELL, rawCellWidth);
-    const cellHeight = rowHeight ?? Math.max(MIN_CELL, rawCellWidth);
+    const cellWidth = effectiveWidth / resolvedColumns;
+    const cellHeight = rowHeight ?? cellWidth;
     setSize((prev) =>
       prev.cellWidth !== cellWidth ||
       prev.cellHeight !== cellHeight ||

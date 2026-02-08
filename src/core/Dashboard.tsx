@@ -1,7 +1,6 @@
 import type { LayoutStore } from "@dashboardity/layout-store";
 import React, { useMemo, useRef } from "react";
-import { GridLayout, } from "react-griditty";
-import { Panel } from "./Panel";
+import { GridLayout } from "react-griditty";
 import type {
   DashboardGridOptions,
   DashboardMode,
@@ -13,6 +12,7 @@ import type {
   WidgetDefinition,
   WidgetRegistry,
 } from "../shared";
+import { Panel } from "./Panel";
 import { useResponsiveGrid } from "./useResponsiveGrid";
 import { FallbackWidget } from "./widgetRegistry";
 
@@ -85,6 +85,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const cellHeight =
     cellHeightProp != null ? cellHeightProp : responsiveSize.cellHeight;
   const isEdit = mode === "edit";
+  const canRenderGrid = cellWidth > 0 && cellHeight > 0;
 
   const configById = useMemo(
     () => new Map(panelConfigs.map((c) => [c.id, c])),
@@ -148,17 +149,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
       className={cn("rd-dashboard", className)}
       style={{ ...dashboardRootStyle, ...style }}
     >
-      <GridLayout
-        store={store}
-        cellWidth={cellWidth}
-        cellHeight={cellHeight}
-        resizeHandle={gridOptions?.resizeHandle}
-        showGrid={Boolean(gridOptions?.showGrid)}
-        draggable={isEdit}
-        resizable={isEdit}
-      >
-        {renderPanel}
-      </GridLayout>
+      {canRenderGrid ? (
+        <GridLayout
+          store={store}
+          cellWidth={cellWidth}
+          cellHeight={cellHeight}
+          resizeHandle={gridOptions?.resizeHandle}
+          showGrid={Boolean(gridOptions?.showGrid)}
+          draggable={isEdit}
+          resizable={isEdit}
+        >
+          {renderPanel}
+        </GridLayout>
+      ) : null}
     </div>
   );
 };
