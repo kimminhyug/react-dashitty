@@ -10,6 +10,10 @@ export {
   loadDashboard,
   serializeDashboard,
 } from "./DashboardSerializer";
+export {
+  downloadDashboardSpec,
+  parseDashboardSpec,
+} from "./dashboardFile";
 export { Panel } from "./Panel";
 export { PanelOptionEditor } from "./PanelOptionEditor";
 export type {

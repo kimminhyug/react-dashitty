@@ -18,10 +18,19 @@ export const useContainerWidth = (
         const next = el.getBoundingClientRect().width;
         return w === next ? w : next;
       });
-    update();
+    update(); // 즉시 1회
+    let rafId2: number | undefined;
+    const rafId = requestAnimationFrame(() => {
+      update();
+      rafId2 = requestAnimationFrame(update); // flex 레이아웃 완료 후 한 번 더 측정
+    });
     const obs = new ResizeObserver(update);
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (typeof rafId2 === "number") cancelAnimationFrame(rafId2);
+      obs.disconnect();
+    };
   }, [containerRef]);
   return width;
 };
@@ -46,15 +55,18 @@ export type ResponsiveGridSize = {
   columns: number;
 };
 
+/** 초기 측정 전까지 쓰는 작은 값 → 잘못된 큰 그리드 너비 연쇄 방지 */
+const INITIAL_COLUMNS = 1;
+
 export const useResponsiveGrid = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   options: UseResponsiveGridOptions,
 ): ResponsiveGridSize => {
   const { columns, breakpoints, rowHeight } = options;
   const [size, setSize] = useState<ResponsiveGridSize>(() => ({
-    cellWidth: 100,
-    cellHeight: rowHeight ?? 100,
-    columns: typeof columns === "number" ? columns : columns.base ?? 12,
+    cellWidth: MIN_CELL,
+    cellHeight: rowHeight ?? MIN_CELL,
+    columns: INITIAL_COLUMNS,
   }));
   const update = useCallback(() => {
     const el = containerRef.current;
@@ -78,10 +90,19 @@ export const useResponsiveGrid = (
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    update();
+    update(); // 즉시 1회
+    let rafId2: number | undefined;
+    const rafId = requestAnimationFrame(() => {
+      update();
+      rafId2 = requestAnimationFrame(update); // flex 레이아웃 완료 후 한 번 더 측정
+    });
     const obs = new ResizeObserver(update);
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (typeof rafId2 === "number") cancelAnimationFrame(rafId2);
+      obs.disconnect();
+    };
   }, [containerRef, update]);
 
   return size;

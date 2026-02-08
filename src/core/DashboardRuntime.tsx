@@ -30,6 +30,7 @@ import {
   loadDashboard,
   serializeDashboard,
 } from "./DashboardSerializer";
+import { downloadDashboardSpec } from "./dashboardFile";
 import { PanelOptionEditor } from "./PanelOptionEditor";
 import { useContainerWidth, useResponsiveGrid } from "./useResponsiveGrid";
 
@@ -58,7 +59,10 @@ export type DashboardRuntimeProps = {
 export type DashboardRuntimeHandle = {
   addPanel: (type: string) => void;
   removePanel: (id: string) => void;
+  /** 현재 스펙 객체 반환 */
   export: () => DashboardSpec;
+  /** 현재 스펙을 JSON 파일로 다운로드 */
+  exportToFile: (filename?: string) => void;
 };
 
 export const DashboardRuntime = forwardRef<
@@ -88,9 +92,9 @@ export const DashboardRuntime = forwardRef<
     breakpoints: initialSpec.breakpoints,
     rowHeight,
   });
+  /** 0이면 window 폭백 없이 작은 기본값만 사용 → 측정 후 ResizeObserver로 갱신 */
   const widthForBreakpoint =
-    containerWidth ||
-    (typeof window !== "undefined" ? window.innerWidth : 1024);
+    containerWidth > 0 ? containerWidth : 320;
   const currentBreakpoint = useMemo(
     () => getBreakpointKey(widthForBreakpoint, initialSpec.breakpoints),
     [widthForBreakpoint, initialSpec.breakpoints],
@@ -311,14 +315,23 @@ export const DashboardRuntime = forwardRef<
     initialSpec.layoutsByBreakpoint,
   ]);
 
+  const exportToFile = useCallback(
+    (filename?: string) => {
+      const spec = exportSpec();
+      downloadDashboardSpec(spec, filename);
+    },
+    [exportSpec],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       addPanel,
       removePanel,
       export: exportSpec,
+      exportToFile,
     }),
-    [addPanel, removePanel, exportSpec],
+    [addPanel, removePanel, exportSpec, exportToFile],
   );
 
   const handleAddPanel = useCallback(() => {
@@ -344,6 +357,7 @@ export const DashboardRuntime = forwardRef<
     width: "100%",
     minWidth: 0,
   };
+  /** flex 자식이 부모보다 넓게 잡히지 않도록 minWidth: 0 → ResizeObserver가 축소 시에도 반영 */
   const gridWrapStyle: React.CSSProperties = {
     flex: 1,
     minWidth: 0,

@@ -17,6 +17,8 @@ export {
   useResponsiveGrid,
   createWidgetRegistry,
   FallbackWidget,
+  downloadDashboardSpec,
+  parseDashboardSpec,
 } from "./core";
 export type {
   DashboardProps,

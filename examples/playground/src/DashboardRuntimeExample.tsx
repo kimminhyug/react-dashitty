@@ -1,13 +1,15 @@
 /**
  * DashboardRuntime 예제.
  * 상태/편집은 Runtime이 담당, Dashboard는 순수 렌더만.
- * ref로 addPanel / removePanel / export() 호출 가능 (툴바/단축키/저장 연동용).
+ * ref로 addPanel / removePanel / export() / exportToFile() 호출 가능.
+ * Import: JSON 파일 선택 시 스펙 교체.
  */
 
 import {
   createStaticDataSource,
   createWidgetRegistry,
   DashboardRuntime,
+  parseDashboardSpec,
   type DashboardRuntimeHandle,
   type DashboardSpec,
 } from "dashboardity";
@@ -16,7 +18,7 @@ import { StatWidget, TextWidget } from "./widgets";
 
 const COLUMNS = 12;
 
-const initialSpec: DashboardSpec = {
+const defaultSpec: DashboardSpec = {
   id: "demo-1",
   title: "Demo Dashboard",
   columns: COLUMNS,
@@ -56,16 +58,45 @@ const widgetRegistry = createWidgetRegistry({
 
 export const DashboardRuntimeExample: React.FC = () => {
   const runtimeRef = useRef<DashboardRuntimeHandle>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [spec, setSpec] = useState<DashboardSpec>(() => defaultSpec);
   const [mode, setMode] = useState<"view" | "edit">("edit");
   const [lastExported, setLastExported] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
-  const handleChange = (spec: DashboardSpec) => {
-    console.log("onChange", spec.id, spec.panels.length, "panels");
+  const handleChange = (next: DashboardSpec) => {
+    console.log("onChange", next.id, next.panels.length, "panels");
   };
 
-  const handleExport = () => {
-    const spec = runtimeRef.current?.export();
-    if (spec) setLastExported(JSON.stringify(spec, null, 2));
+  const handleExportPreview = () => {
+    const data = runtimeRef.current?.export();
+    if (data) setLastExported(JSON.stringify(data, null, 2));
+  };
+
+  const handleExportToFile = () => {
+    runtimeRef.current?.exportToFile();
+  };
+
+  const handleImportClick = () => {
+    setImportError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result);
+        const parsed = parseDashboardSpec(text);
+        setSpec(parsed);
+      } catch (err) {
+        setImportError(err instanceof Error ? err.message : "Invalid JSON");
+      }
+    };
+    reader.readAsText(file, "utf-8");
   };
 
   return (
@@ -96,16 +127,42 @@ export const DashboardRuntimeExample: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={handleExport}
+          onClick={handleExportToFile}
           style={{ padding: "6px 12px", cursor: "pointer" }}
         >
-          Export JSON (ref.export())
+          Export (파일 다운로드)
         </button>
+        <button
+          type="button"
+          onClick={handleExportPreview}
+          style={{ padding: "6px 12px", cursor: "pointer" }}
+        >
+          Export (미리보기)
+        </button>
+        <button
+          type="button"
+          onClick={handleImportClick}
+          style={{ padding: "6px 12px", cursor: "pointer" }}
+        >
+          Import (JSON 파일)
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json"
+          style={{ display: "none" }}
+          onChange={handleImportFile}
+        />
       </div>
+      {importError != null && (
+        <div style={{ marginBottom: 8, color: "#c00", fontSize: 12 }}>
+          Import 오류: {importError}
+        </div>
+      )}
       <DashboardRuntime
         ref={runtimeRef}
-        key={initialSpec.id}
-        initialSpec={initialSpec}
+        key={spec.id}
+        initialSpec={spec}
         widgets={widgetRegistry}
         dataSource={dataSource}
         mode={mode}
