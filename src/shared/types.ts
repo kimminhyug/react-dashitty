@@ -64,10 +64,10 @@ export type PanelConfig = {
   containerStyle?: CSSProperties;
 };
 
-/** 브레이크포인트 이름 (base = 0px, sm/md/lg/xl = 해당 width 이상) */
-export type BreakpointKey = "base" | "sm" | "md" | "lg" | "xl";
+/** 브레이크포인트 이름 (base = 0px, sm/md/lg/xl/xxl = 해당 width 이상). 사용자 정의 키(예: a4)도 허용 */
+export type BreakpointKey = "base" | "sm" | "md" | "lg" | "xl" | "xxl" | (string & {});
 
-/** 브레이크포인트별 너비(px). sm~xl은 해당 구간 최소 너비, base는 선택 시 "base 구간 최대 너비"(width < base 이면 base 적용). */
+/** 브레이크포인트별 너비(px). sm~xxl은 해당 구간 최소 너비, base는 선택 시 "base 구간 최대 너비"(width < base 이면 base 적용). */
 export type BreakpointWidths = Partial<Record<BreakpointKey, number>>;
 
 /** 브레이크포인트별 그리드 열 수. base 필수, 나머지 선택. */
